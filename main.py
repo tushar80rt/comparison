@@ -278,17 +278,31 @@ if chat_text:
         
         sg_eval = evaluate_answer_quality(question, sg_context, sg_answer, stage["llm"])
         fc_eval = evaluate_answer_quality(question, fc_context, fc_answer, stage["llm"])
-        
+
         for metric in ["faithfulness", "answer_relevance", "context_relevance"]:
-            sg_m[f"{metric}_score"] = sg_eval.get(metric, {}).get("score", 0.0)
-            sg_m[f"{metric}_reason"] = sg_eval.get(metric, {}).get("reasoning", "")
-            fc_m[f"{metric}_score"] = fc_eval.get(metric, {}).get("score", 0.0)
-            fc_m[f"{metric}_reason"] = fc_eval.get(metric, {}).get("reasoning", "")
-            
+            result_block = sg_eval.get(metric, {})
+            sg_m[f"{metric}_score"]      = result_block.get("score", 0.0)       # None on failure
+            sg_m[f"{metric}_reason"]     = result_block.get("reasoning", "")
+            sg_m[f"{metric}_eval_failed"] = result_block.get("eval_failed", False)
+
+            result_block = fc_eval.get(metric, {})
+            fc_m[f"{metric}_score"]      = result_block.get("score", 0.0)       # None on failure
+            fc_m[f"{metric}_reason"]     = result_block.get("reasoning", "")
+            fc_m[f"{metric}_eval_failed"] = result_block.get("eval_failed", False)
+
         sg_m["completeness_score"] = compute_completeness_score(sg_m)
         fc_m["completeness_score"] = compute_completeness_score(fc_m)
-        sg_m["completeness_reason"] = f"Derived from word count ({sg_m.get('word_count', 0)}), field count ({sg_m.get('field_count', 0)}), and JSON depth ({sg_m.get('json_depth', 0)})."
-        fc_m["completeness_reason"] = f"Derived from word count ({fc_m.get('word_count', 0)}), field count ({fc_m.get('field_count', 0)}), and JSON depth ({fc_m.get('json_depth', 0)})."
+
+        _sg_mode = "plain-text" if sg_m.get("field_count", 0) == 0 and sg_m.get("json_depth", 0) == 0 else "structured"
+        _fc_mode = "plain-text" if fc_m.get("field_count", 0) == 0 and fc_m.get("json_depth", 0) == 0 else "structured"
+        sg_m["completeness_reason"] = (
+            f"Scored in {_sg_mode} mode — word count ({sg_m.get('word_count', 0)}), "
+            f"field count ({sg_m.get('field_count', 0)}), JSON depth ({sg_m.get('json_depth', 0)})."
+        )
+        fc_m["completeness_reason"] = (
+            f"Scored in {_fc_mode} mode — word count ({fc_m.get('word_count', 0)}), "
+            f"field count ({fc_m.get('field_count', 0)}), JSON depth ({fc_m.get('json_depth', 0)})."
+        )
 
     st.markdown('<hr class="custom-divider">', unsafe_allow_html=True)
     st.markdown("""

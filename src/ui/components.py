@@ -44,22 +44,52 @@ def render_metrics(sg_m: Dict[str, Any], fc_m: Dict[str, Any]) -> None:
             cols = st.columns(3)
 
 
+def _fmt_score(score, failed: bool) -> str:
+    """Format a metric score for display. Returns ⚠️ Eval Failed for crashed metrics."""
+    if failed or score is None:
+        return "⚠️ Eval Failed"
+    return f"{round(score * 100)}%"
+
+
+def _progress_val(score, failed: bool) -> float:
+    """Return a safe 0.0–1.0 progress value, always 0.0 when eval failed."""
+    if failed or score is None:
+        return 0.0
+    return float(score)
+
+
+def _overall(scores_and_flags: list) -> int:
+    """Average only the metrics that did NOT fail. Returns 0 when all failed."""
+    valid = [s for s, failed in scores_and_flags if not failed and s is not None]
+    if not valid:
+        return 0
+    return round(sum(valid) / len(valid) * 100)
+
+
 def render_quality_evaluation(sg_m: Dict[str, Any], fc_m: Dict[str, Any]) -> None:
     if "faithfulness_score" not in sg_m and "faithfulness_score" not in fc_m:
         st.info("ℹ️ RAG Quality Evaluation is not available for this legacy run.")
         return
 
-    sg_faith = sg_m.get("faithfulness_score", 0.0)
-    sg_rel   = sg_m.get("answer_relevance_score", 0.0)
-    sg_ctx   = sg_m.get("context_relevance_score", 0.0)
-    sg_comp  = sg_m.get("completeness_score", 0.0)
-    sg_overall = round((sg_faith + sg_rel + sg_ctx + sg_comp) / 4 * 100)
+    sg_faith  = sg_m.get("faithfulness_score", 0.0)
+    sg_rel    = sg_m.get("answer_relevance_score", 0.0)
+    sg_ctx    = sg_m.get("context_relevance_score", 0.0)
+    sg_comp   = sg_m.get("completeness_score", 0.0)
+    sg_faith_fail = sg_m.get("faithfulness_eval_failed", False)
+    sg_rel_fail   = sg_m.get("answer_relevance_eval_failed", False)
+    sg_ctx_fail   = sg_m.get("context_relevance_eval_failed", False)
+    sg_overall    = _overall([(sg_faith, sg_faith_fail), (sg_rel, sg_rel_fail),
+                               (sg_ctx, sg_ctx_fail),   (sg_comp, False)])
 
-    fc_faith = fc_m.get("faithfulness_score", 0.0)
-    fc_rel   = fc_m.get("answer_relevance_score", 0.0)
-    fc_ctx   = fc_m.get("context_relevance_score", 0.0)
-    fc_comp  = fc_m.get("completeness_score", 0.0)
-    fc_overall = round((fc_faith + fc_rel + fc_ctx + fc_comp) / 4 * 100)
+    fc_faith  = fc_m.get("faithfulness_score", 0.0)
+    fc_rel    = fc_m.get("answer_relevance_score", 0.0)
+    fc_ctx    = fc_m.get("context_relevance_score", 0.0)
+    fc_comp   = fc_m.get("completeness_score", 0.0)
+    fc_faith_fail = fc_m.get("faithfulness_eval_failed", False)
+    fc_rel_fail   = fc_m.get("answer_relevance_eval_failed", False)
+    fc_ctx_fail   = fc_m.get("context_relevance_eval_failed", False)
+    fc_overall    = _overall([(fc_faith, fc_faith_fail), (fc_rel, fc_rel_fail),
+                               (fc_ctx, fc_ctx_fail),   (fc_comp, False)])
 
     col1, col2 = st.columns(2, gap="large")
 
@@ -71,14 +101,14 @@ def render_quality_evaluation(sg_m: Dict[str, Any], fc_m: Dict[str, Any]) -> Non
             <div style="font-size:0.8rem;color:#94a3b8;">Overall RAG Quality Score</div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown(f"**Faithfulness (Groundedness)**: {round(sg_faith * 100)}%")
-        st.progress(sg_faith)
-        st.markdown(f"**Answer Relevance**: {round(sg_rel * 100)}%")
-        st.progress(sg_rel)
-        st.markdown(f"**Context Relevance**: {round(sg_ctx * 100)}%")
-        st.progress(sg_ctx)
-        st.markdown(f"**Completeness (Data Richness)**: {round(sg_comp * 100)}%")
-        st.progress(sg_comp)
+        st.markdown(f"**Faithfulness (Groundedness)**: {_fmt_score(sg_faith, sg_faith_fail)}")
+        st.progress(_progress_val(sg_faith, sg_faith_fail))
+        st.markdown(f"**Answer Relevance**: {_fmt_score(sg_rel, sg_rel_fail)}")
+        st.progress(_progress_val(sg_rel, sg_rel_fail))
+        st.markdown(f"**Context Relevance**: {_fmt_score(sg_ctx, sg_ctx_fail)}")
+        st.progress(_progress_val(sg_ctx, sg_ctx_fail))
+        st.markdown(f"**Completeness (Data Richness)**: {_fmt_score(sg_comp, False)}")
+        st.progress(_progress_val(sg_comp, False))
 
     with col2:
         st.markdown(f"""
@@ -88,27 +118,35 @@ def render_quality_evaluation(sg_m: Dict[str, Any], fc_m: Dict[str, Any]) -> Non
             <div style="font-size:0.8rem;color:#94a3b8;">Overall RAG Quality Score</div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown(f"**Faithfulness (Groundedness)**: {round(fc_faith * 100)}%")
-        st.progress(fc_faith)
-        st.markdown(f"**Answer Relevance**: {round(fc_rel * 100)}%")
-        st.progress(fc_rel)
-        st.markdown(f"**Context Relevance**: {round(fc_ctx * 100)}%")
-        st.progress(fc_ctx)
-        st.markdown(f"**Completeness (Data Richness)**: {round(fc_comp * 100)}%")
-        st.progress(fc_comp)
+        st.markdown(f"**Faithfulness (Groundedness)**: {_fmt_score(fc_faith, fc_faith_fail)}")
+        st.progress(_progress_val(fc_faith, fc_faith_fail))
+        st.markdown(f"**Answer Relevance**: {_fmt_score(fc_rel, fc_rel_fail)}")
+        st.progress(_progress_val(fc_rel, fc_rel_fail))
+        st.markdown(f"**Context Relevance**: {_fmt_score(fc_ctx, fc_ctx_fail)}")
+        st.progress(_progress_val(fc_ctx, fc_ctx_fail))
+        st.markdown(f"**Completeness (Data Richness)**: {_fmt_score(fc_comp, False)}")
+        st.progress(_progress_val(fc_comp, False))
 
     st.markdown("<br>", unsafe_allow_html=True)
     with st.expander("🔍 Show Detailed Quality Critique"):
         c_sg, c_fc = st.columns(2, gap="large")
         with c_sg:
             st.markdown("### 🕷 ScrapeGraphAI Critique")
+            if sg_faith_fail:
+                st.warning("⚠️ Faithfulness evaluation failed — LLM returned invalid JSON. Score excluded from average.")
             st.markdown(f"**Faithfulness (Groundedness)**:\n{sg_m.get('faithfulness_reason', 'No reasoning available.')}")
+            if sg_rel_fail:
+                st.warning("⚠️ Answer Relevance evaluation failed — LLM returned invalid JSON. Score excluded from average.")
             st.markdown(f"**Answer Relevance**:\n{sg_m.get('answer_relevance_reason', 'No reasoning available.')}")
             st.markdown(f"**Context Relevance**:\n{sg_m.get('context_relevance_reason', 'No reasoning available.')}")
             st.markdown(f"**Completeness (Data Richness)**:\n{sg_m.get('completeness_reason', 'No reasoning available.')}")
         with c_fc:
             st.markdown("### 🔥 Firecrawl Critique")
+            if fc_faith_fail:
+                st.warning("⚠️ Faithfulness evaluation failed — LLM returned invalid JSON. Score excluded from average.")
             st.markdown(f"**Faithfulness (Groundedness)**:\n{fc_m.get('faithfulness_reason', 'No reasoning available.')}")
+            if fc_rel_fail:
+                st.warning("⚠️ Answer Relevance evaluation failed — LLM returned invalid JSON. Score excluded from average.")
             st.markdown(f"**Answer Relevance**:\n{fc_m.get('answer_relevance_reason', 'No reasoning available.')}")
             st.markdown(f"**Context Relevance**:\n{fc_m.get('context_relevance_reason', 'No reasoning available.')}")
             st.markdown(f"**Completeness (Data Richness)**:\n{fc_m.get('completeness_reason', 'No reasoning available.')}")
@@ -145,6 +183,9 @@ def render_export(result: Dict[str, Any], run_id: int) -> None:
     timestamp = result.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M"))
     sg_m      = result.get("sg_metrics", {})
     fc_m      = result.get("fc_metrics", {})
+    
+    def _fmt_pct(val):
+        return f"{round(val * 100)}%" if isinstance(val, (int, float)) else "Eval Failed"
 
     md_report = f"""# ⚡ Semantic Extraction Arena — Report
 
@@ -159,10 +200,10 @@ def render_export(result: Dict[str, Any], run_id: int) -> None:
 
 | Metric | ScrapeGraphAI | Firecrawl |
 |--------|:---:|:---:|
-| Faithfulness   | {f'{round(sg_m["faithfulness_score"] * 100)}%' if "faithfulness_score" in sg_m else "—"} | {f'{round(fc_m["faithfulness_score"] * 100)}%' if "faithfulness_score" in fc_m else "—"} |
-| Answer Relevance | {f'{round(sg_m["answer_relevance_score"] * 100)}%' if "answer_relevance_score" in sg_m else "—"} | {f'{round(fc_m["answer_relevance_score"] * 100)}%' if "answer_relevance_score" in fc_m else "—"} |
-| Context Relevance | {f'{round(sg_m["context_relevance_score"] * 100)}%' if "context_relevance_score" in sg_m else "—"} | {f'{round(fc_m["context_relevance_score"] * 100)}%' if "context_relevance_score" in fc_m else "—"} |
-| Completeness Score | {f'{round(sg_m["completeness_score"] * 100)}%' if "completeness_score" in sg_m else "—"} | {f'{round(fc_m["completeness_score"] * 100)}%' if "completeness_score" in fc_m else "—"} |
+| Faithfulness   | {_fmt_pct(sg_m.get("faithfulness_score"))} | {_fmt_pct(fc_m.get("faithfulness_score"))} |
+| Answer Relevance | {_fmt_pct(sg_m.get("answer_relevance_score"))} | {_fmt_pct(fc_m.get("answer_relevance_score"))} |
+| Context Relevance | {_fmt_pct(sg_m.get("context_relevance_score"))} | {_fmt_pct(fc_m.get("context_relevance_score"))} |
+| Completeness Score | {_fmt_pct(sg_m.get("completeness_score"))} | {_fmt_pct(fc_m.get("completeness_score"))} |
 | Scrape Latency | {sg_m.get("scrape_latency", "—")}s | {fc_m.get("scrape_latency", "—")}s |
 | RAG Latency    | {sg_m.get("rag_latency", "—")}s    | {fc_m.get("rag_latency", "—")}s |
 | Total Latency  | {sg_m.get("total_latency", "—")}s  | {fc_m.get("total_latency", "—")}s |

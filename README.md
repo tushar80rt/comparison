@@ -228,9 +228,9 @@ All metrics are computed per run, per provider, and stored in SQLite.
 
 | Metric | Source | How it is computed |
 |---|---|---|
-| **Faithfulness** | `evaluate_answer_quality()` | LLM-graded — does the answer stick to retrieved context? |
+| **Faithfulness** | `evaluate_answer_quality()` | LLM-graded — does the answer stick to retrieved context? (Handled via robust JSON extraction wrapper) |
 | **Answer Relevance** | `evaluate_answer_quality()` | LLM-graded — does the answer address the question? |
-| **Context Relevance** | `evaluate_answer_quality()` | LLM-graded — is the retrieved context relevant to the question? |
+| **Context Relevance** | `evaluate_answer_quality()` | Disabled — DeepEval requires expected ground-truth output to measure this. |
 | **Completeness** | `compute_completeness_score()` | Derived score from word count, field count, and JSON depth |
 | **Scrape Latency** | `time.perf_counter()` | Time for the scraping API call |
 | **RAG Latency** | `time.perf_counter()` | Time to stream the full RAG answer |

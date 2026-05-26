@@ -12,6 +12,9 @@ logger = get_logger(__name__)
 def stream_judge_verdict(question: str, scrapegraph_answer: str, firecrawl_answer: str, sg_m: dict, fc_m: dict, language_model: ChatGroq) -> Generator[str, None, None]:
     """Stream comparative judge verdict - yields text chunks with RateLimit handling."""
     
+    def _fmt(val):
+        return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
+        
     judge_prompt = f"""You are an expert AI benchmarking judge. Evaluate two RAG answers with strict objectivity.
 
 ## CRITICAL RULE — BLIND JUDGE PROTOCOL
@@ -32,7 +35,7 @@ You are a BLIND judge. You have NO access to external knowledge, the internet, o
 {scrapegraph_answer}
 
 **Metrics:**
-- Faithfulness: {sg_m.get('faithfulness_score', 0.0):.2f} | Answer Relevance: {sg_m.get('answer_relevance_score', 0.0):.2f} | Completeness: {sg_m.get('completeness_score', 0.0):.2f}
+- Faithfulness: {_fmt(sg_m.get('faithfulness_score'))} | Answer Relevance: {_fmt(sg_m.get('answer_relevance_score'))} | Completeness: {_fmt(sg_m.get('completeness_score'))}
 - Word Count: {sg_m.get('word_count', 0)} | Scrape Latency: {sg_m.get('scrape_latency', 0)}s
 
 ---
@@ -41,7 +44,7 @@ You are a BLIND judge. You have NO access to external knowledge, the internet, o
 {firecrawl_answer}
 
 **Metrics:**
-- Faithfulness: {fc_m.get('faithfulness_score', 0.0):.2f} | Answer Relevance: {fc_m.get('answer_relevance_score', 0.0):.2f} | Completeness: {fc_m.get('completeness_score', 0.0):.2f}
+- Faithfulness: {_fmt(fc_m.get('faithfulness_score'))} | Answer Relevance: {_fmt(fc_m.get('answer_relevance_score'))} | Completeness: {_fmt(fc_m.get('completeness_score'))}
 - Word Count: {fc_m.get('word_count', 0)} | Scrape Latency: {fc_m.get('scrape_latency', 0)}s
 
 ---
@@ -63,9 +66,9 @@ You are a BLIND judge. You have NO access to external knowledge, the internet, o
 **3. Evaluation Summary Table**
 | Criteria | ScrapeGraphAI | Firecrawl |
 |---|---|---|
-| Faithfulness | {sg_m.get('faithfulness_score', 0.0):.2f} | {fc_m.get('faithfulness_score', 0.0):.2f} |
-| Answer Relevance | {sg_m.get('answer_relevance_score', 0.0):.2f} | {fc_m.get('answer_relevance_score', 0.0):.2f} |
-| Completeness | {sg_m.get('completeness_score', 0.0):.2f} | {fc_m.get('completeness_score', 0.0):.2f} |
+| Faithfulness | {_fmt(sg_m.get('faithfulness_score'))} | {_fmt(fc_m.get('faithfulness_score'))} |
+| Answer Relevance | {_fmt(sg_m.get('answer_relevance_score'))} | {_fmt(fc_m.get('answer_relevance_score'))} |
+| Completeness | {_fmt(sg_m.get('completeness_score'))} | {_fmt(fc_m.get('completeness_score'))} |
 | Real Code Snippets | (assess from answer) | (assess from answer) |
 | Empty/Invented Rows | (assess from answer) | (assess from answer) |
 | Word Count | {sg_m.get('word_count', 0)} | {fc_m.get('word_count', 0)} |
