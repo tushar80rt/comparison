@@ -18,7 +18,7 @@
 
 ## Overview
 
-**Semantic Extraction Arena (SEA)** compares two web-scraping APIs — **ScrapeGraphAI** and **Firecrawl** — across five operation modes. Scraped content is embedded into a **ChromaDB** vector store and queried via a **LangChain** retrieval chain backed by **Groq's Llama-4-Scout** model. Each RAG answer is scored with **DeepEval** (hallucination + answer-relevancy) and a streaming LLM judge declares the winner. All runs are saved to **SQLite** and visualised in a separate **Analytics** page.
+**Semantic Extraction Arena (SEA)** compares two web-scraping APIs — **ScrapeGraphAI** and **Firecrawl** — across four operation modes. Scraped content is embedded into a **ChromaDB** vector store and queried via a **LangChain** retrieval chain (top-k=12) backed by **Groq's Llama-4-Scout** model. Each RAG answer is scored with **DeepEval** (faithfulness, answer relevancy, and context relevancy) alongside a computed completeness score, and a streaming LLM judge declares the winner. All runs are saved to **SQLite** and visualised in a separate **Analytics** page.
 
 ---
 
@@ -26,11 +26,13 @@
 
 | Area | What the code actually does |
 |---|---|
-| **5 scraping modes** | Targeted Extraction, Raw Markdown, Site Crawl, Link Discovery, Web Search |
-| **Dual RAG pipeline** | One independent ChromaDB collection per provider per run (UUID-stamped) |
-| **DeepEval scoring** | `HallucinationMetric` → faithfulness, `AnswerRelevancyMetric` → relevance |
+| **4 scraping modes** | Targeted Extraction, Raw Scrape, Site Crawl, Web Search |
+| **Dual RAG pipeline** | One independent ChromaDB collection per provider per run (UUID-stamped), top-k=12 retrieval |
+| **Strict zero-hallucination prompt** | System prompt enforces verbatim extraction — no invented content, no paraphrased code |
+| **DeepEval scoring** | `faithfulness`, `answer_relevance`, `context_relevance` + derived `completeness_score` |
 | **Streaming judge** | Groq LLM streams a comparative verdict with a declared winner |
-| **Run history** | SQLite `runs` table — load or delete any past run from the sidebar |
+| **Runtime API keys** | Keys can be entered in the sidebar at runtime without editing `.env` |
+| **Run history** | SQLite `runs` table — load or delete any past run from the sidebar (last 25 shown) |
 | **Analytics dashboard** | Latency charts, quality averages, win-rate cards, full runs table |
 | **Export** | Download each run as JSON or Markdown report |
 
@@ -54,10 +56,10 @@ flowchart TD
     D1 --> E1[Embed + Store\nChromaDB Collection A]
     D2 --> E2[Embed + Store\nChromaDB Collection B]
 
-    E1 --> F1[RAG Answer — ScrapeGraph\nGroq Llama-4-Scout]
-    E2 --> F2[RAG Answer — Firecrawl\nGroq Llama-4-Scout]
+    E1 --> F1[RAG Answer — ScrapeGraph\nGroq Llama-4-Scout · top-k=12]
+    E2 --> F2[RAG Answer — Firecrawl\nGroq Llama-4-Scout · top-k=12]
 
-    F1 & F2 --> G[DeepEval\nHallucination + Answer Relevancy]
+    F1 & F2 --> G[DeepEval\nFaithfulness · Answer Relevancy · Context Relevancy · Completeness]
     F1 & F2 --> H[AI Judge\nStreaming Verdict]
 
     G & H --> I[(SQLite\nhistory.db)]
@@ -87,13 +89,13 @@ sequenceDiagram
     FC-->>App: data + latency
     App->>VDB: create_vectorstore(sg_data, unique_name)
     App->>VDB: create_vectorstore(fc_data, unique_name)
-    App->>LLM: stream_rag_answer via SG vectorstore
+    App->>LLM: stream_rag_answer via SG vectorstore (k=12)
     LLM-->>App: sg_answer (streamed)
-    App->>LLM: stream_rag_answer via FC vectorstore
+    App->>LLM: stream_rag_answer via FC vectorstore (k=12)
     LLM-->>App: fc_answer (streamed)
     App->>DE: evaluate_answer_quality(sg_answer)
     App->>DE: evaluate_answer_quality(fc_answer)
-    DE-->>App: faithfulness + relevance scores
+    DE-->>App: faithfulness + relevance + completeness scores
     App->>LLM: stream_judge_verdict(sg_answer, fc_answer, metrics)
     LLM-->>App: judge verdict (streamed)
     App->>DB: save_run(url, prompt, answers, metrics)
@@ -115,7 +117,8 @@ comperision-scraping/
 │   └── analytics.py               # Analytics dashboard (Streamlit multi-page)
 │
 ├── assets/
-│   └── fire.svg                   # Firecrawl logo (base64-embedded in UI)
+│   ├── fire.svg                   # Firecrawl logo (base64-embedded in UI)
+│   └── Groq.svg                   # Groq logo shown in sidebar
 │
 ├── src/
 │   ├── config.py                  # Env vars, model names, DB/Chroma paths
@@ -128,13 +131,13 @@ comperision-scraping/
 │   ├── scraping/
 │   │   ├── scrapegraph.py         # extract, scrape, search, crawl (with async polling)
 │   │   └── firecrawl.py           # scrape, extract_llm, map, search, crawl
-│    │
-    ├── rag/
-    │   ├── vector_store.py        # ChromaDB store + HuggingFace embeddings
-    │   └── qa_chain.py            # Retrieval QA chain builder & streamer
-    │
+│   │
+│   ├── rag/
+│   │   ├── vector_store.py        # ChromaDB store + HuggingFace embeddings
+│   │   └── qa_chain.py            # Retrieval QA chain builder & streamer (k=12, zero-hallucination prompt)
+│   │
 │   ├── evaluation/
-│   │   ├── metrics.py             # GroqDeepEvalModel wrapper, HallucinationMetric, AnswerRelevancyMetric
+│   │   ├── metrics.py             # evaluate_answer_quality(), compute_completeness_score()
 │   │   └── judge.py               # stream_judge_verdict() — streaming Groq LLM judge
 │   │
 │   ├── ui/
@@ -179,13 +182,15 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (or enter keys at runtime via the sidebar):
 
 ```env
 GROQ_API_KEY=your_groq_api_key
 SCRAPEGRAPH_API_KEY=your_scrapegraph_api_key
 FIRECRAWL_API_KEY=your_firecrawl_api_key
 ```
+
+> **Tip:** You can also paste API keys directly in the sidebar of the running app and click **💾 Save Keys** — no restart required.
 
 ---
 
@@ -224,9 +229,10 @@ All metrics are computed per run, per provider, and stored in SQLite.
 
 | Metric | Source | How it is computed |
 |---|---|---|
-| **Faithfulness** | `DeepEval HallucinationMetric` | `1 − hallucination_score` |
-| **Answer Relevance** | `DeepEval AnswerRelevancyMetric` | Direct metric score |
-| **Context Relevance** | Placeholder | Stored as `0.0` — no ground truth available |
+| **Faithfulness** | `evaluate_answer_quality()` | LLM-graded — does the answer stick to retrieved context? |
+| **Answer Relevance** | `evaluate_answer_quality()` | LLM-graded — does the answer address the question? |
+| **Context Relevance** | `evaluate_answer_quality()` | LLM-graded — is the retrieved context relevant to the question? |
+| **Completeness** | `compute_completeness_score()` | Derived score from word count, field count, and JSON depth |
 | **Scrape Latency** | `time.perf_counter()` | Time for the scraping API call |
 | **RAG Latency** | `time.perf_counter()` | Time to stream the full RAG answer |
 | **Total Latency** | Computed | `scrape_latency + rag_latency` |
@@ -236,13 +242,28 @@ All metrics are computed per run, per provider, and stored in SQLite.
 
 ---
 
+## RAG Pipeline Details
+
+The retrieval chain (`qa_chain.py`) enforces strict zero-hallucination behaviour via a hardcoded system prompt with six absolute rules:
+
+1. **Data already collected** — never claim inability to access the web; all content is in the provided context.
+2. **Zero hallucination** — no guessing, no extrapolation; missing data must be reported as `"Not found in the extracted content."`.
+3. **Verbatim code** — code snippets must be reproduced exactly as they appear in the context.
+4. **Complete extraction** — all matching instances (frameworks, links, headings, code blocks) must be included.
+5. **No invented tables** — table rows are only created when the data to fill them is explicitly present.
+6. **Clean Markdown output** — headings, bullet lists, numbered lists, and fenced code blocks; no preamble.
+
+The retriever fetches **k=12** chunks per query to maximise context coverage for long pages.
+
+---
+
 ## Dependencies
 
 | Group | Packages |
 |---|---|
 | **App** | `streamlit`, `python-dotenv` |
 | **Scraping** | `scrapegraph-py`, `firecrawl-py` |
-| **LLM / RAG** | `langchain`, `langchain-groq`, `langchain-community`, `langchain-huggingface`, `langchain-text-splitters` |
+| **LLM / RAG** | `langchain`, `langchain-groq`, `langchain-community`, `langchain-huggingface`, `langchain-text-splitters`, `langchain-classic` |
 | **Vector DB** | `chromadb`, `sentence-transformers` |
 | **Evaluation** | `deepeval`, `ragas`, `datasets` |
 
