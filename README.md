@@ -168,8 +168,8 @@ comperision-scraping/
 
 ```bash
 # Clone
-git clone https://github.com/your-username/comperision-scraping.git
-cd comperision-scraping
+git clone https://github.com/tushar80rt/comparison.git
+cd comperision
 
 # Virtual environment (Windows)
 python -m venv venv
