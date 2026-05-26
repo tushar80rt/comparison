@@ -1,0 +1,29 @@
+# Project dependencies for Semantic Extraction Arena
+# Core environment
+python-dotenv
+streamlit
+
+# Web scraping SDKs
+scrapegraph-py
+firecrawl-py
+
+# LLM and language chain ecosystem
+langchain
+langchain-groq
+langchain-community
+langchain-huggingface
+langchain-text-splitters
+
+# Vector store and embeddings
+chromadb
+sentence-transformers
+
+# Evaluation tools
+ragas
+datasets
+deepeval
+
+# Additional utilities (standard library covers most)
+# Ensure compatible versions if needed, e.g.,
+# ragas>=1.0.0
+# deepeval>=1.0.0
