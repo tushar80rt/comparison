@@ -164,7 +164,6 @@ comperision-scraping/
 
 ## Installation
 
-**Requirements:** Python 3.10 or 3.11, and API keys for Groq, ScrapeGraphAI, and Firecrawl.
 
 ```bash
 # Clone
